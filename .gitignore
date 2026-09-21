@@ -1,0 +1,23 @@
+# Código dos autores — clonado em tempo de execução, não redistribuído aqui
+lbcf_repo/
+lbcf_repo.zip
+WWW-2022-PAPER-SUPPLEMENTARY-MATERIALS/
+
+# Saídas geradas pelo notebook (regeneráveis; não versionar)
+hillstrom_udcf_cate_*.csv
+hillstrom_cate_*.csv
+udcf_hillstrom/hillstrom_udcf_cate.csv
+*_predictions.txt
+predicoes_*.txt
+
+# Artigos de terceiros (material protegido por direito autoral)
+referencias MBA/
+artigos tese/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Word
+~$*.docx
