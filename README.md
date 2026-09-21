@@ -1,4 +1,4 @@
-# UDCF aplicado à base Hillstrom — TCC (MBA em Data Science & Analytics)
+# UDCF aplicado à base Hillstrom 
 
 Aplicação do modelo **UDCF** (*Unified Discriminative Causal Forest*) à base pública de
 marketing Hillstrom, cobrindo a etapa de estimação de CATE.
