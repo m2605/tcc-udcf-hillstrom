@@ -748,6 +748,28 @@ estabelecida**.
 
 **Resposta à pergunta "o Intra split ajuda na Hillstrom?": não de forma detectável.**
 
+### 6.12 Contagem de braços, e por que isso limita o alcance do teste
+
+**Convenção: K = número de grupos experimentais − 1.** O controle é representado pela
+ausência de todas as colunas de tratamento, nunca por uma coluna própria.
+
+| | grupos | K |
+|---|---|---|
+| Autores | 8 (`exp_group` 0–7; contagens 276, 231, 255, 259, 237, 251, 227, 264) | 7 |
+| Hillstrom | 3 (No E-Mail, Mens, Womens) | **2** |
+
+O `exp_group = 0` dos autores tem 276 linhas, que são exatamente as 276 com as sete
+colunas de tratamento zeradas. Nota de desenho: esse grupo **não** é ausência de
+tratamento — pelo `coin_map` do `LBCF_budget_allocation-RCT.py` ele recebe bônus de 0,1, o
+menor nível. Na Hillstrom, `No E-Mail` é controle verdadeiro.
+
+**Implicação para o resultado da ablação (6.11).** O critério Intra split mede a variância
+entre os K efeitos dentro do nó. Com K = 7 há muitas formas de os tratamentos se
+diferenciarem; com **K = 2 a expressão colapsa para (θ₁ − θ₂)²/2** — um único grau de
+liberdade. Uma explicação plausível para o Intra split não fazer diferença detectável é
+que, com dois braços, ele tem pouco o que discriminar. A contribuição do artigo foi
+projetada para o cenário de muitos tratamentos, que não é o da Hillstrom.
+
 ---
 
 ## 7. Estado de verificação
