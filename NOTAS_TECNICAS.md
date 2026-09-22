@@ -582,6 +582,94 @@ Separadamente, o efeito conhecido da base aparece com força: o e-mail feminino 
 desfecho `visit`, z = 9,7). Mas esse é um efeito **de um braço isolado**, não de separação
 entre braços — que é o que o UDCF busca.
 
+### 6.9 Comparação com baselines
+
+Seis configurações, avaliadas sobre **as mesmas 64.000 linhas**, com predições
+fora-da-amostra em todos os casos: `predict_oob` para os modelos em C++, validação
+cruzada de 5 dobras estratificada para os do CausalML. As baselines usam os
+hiperparâmetros exatos que os autores do LBCF configuraram para elas.
+
+**Mens E-Mail** (ATE ingênuo 0,006805; n = 42.613)
+
+| modelo | desvio | BLP | p | Q5−Q1 | p | placebo p |
+|---|---|---|---|---|---|---|
+| UDCF default | 0,000091 | −94,3 | 0,000 | −0,0243 | 0,000 | 0,000 |
+| UDCF `ip=0` | 0,002734 | 0,015 | 0,967 | 0,00263 | 0,382 | 0,973 |
+| Ablação `ip=0` | 0,003992 | 0,024 | 0,922 | 0,00081 | 0,798 | 0,910 |
+| Chi | 0,002800 | 0,446 | 0,200 | 0,00279 | 0,358 | 0,217 |
+| ED | 0,004007 | 0,314 | 0,234 | 0,00212 | 0,488 | 0,257 |
+| CTS | 0,002578 | 0,260 | 0,468 | 0,00394 | 0,200 | 0,423 |
+
+**Womens E-Mail** (ATE ingênuo 0,003111; n = 42.693)
+
+| modelo | desvio | BLP | p | Q5−Q1 | p | placebo p |
+|---|---|---|---|---|---|---|
+| UDCF default | 0,000083 | −90,4 | 0,000 | −0,0219 | 0,000 | 0,000 |
+| UDCF `ip=0` | 0,002856 | 0,401 | 0,196 | 0,00406 | 0,118 | 0,213 |
+| Ablação `ip=0` | 0,003774 | −0,038 | 0,882 | 0,00107 | 0,702 | 0,850 |
+| **Chi** | 0,003393 | **0,523** | **0,047** | **0,00708** | **0,011** | 0,053 |
+| ED | 0,003728 | 0,213 | 0,424 | 0,00379 | 0,184 | 0,480 |
+| CTS | 0,002348 | −0,118 | 0,766 | −0,00007 | 0,980 | 0,737 |
+
+**Interpretação, com a ressalva obrigatória.** O Chi no braço feminino é o único a atingir
+significância nominal. **Mas são 10 testes** (5 modelos × 2 braços), e um resultado a
+p = 0,047 em 10 testes é aproximadamente o que o acaso produz; sob Bonferroni o limiar
+seria 0,005. O placebo dá p = 0,053, na fronteira. Redação correta: *indício de
+heterogeneidade detectável no braço feminino, que não sobrevive à correção para múltiplas
+comparações*.
+
+**Conclusão: nenhum modelo demonstra heterogeneidade que sobreviva à correção por
+multiplicidade.** Coerente com o teste conjunto das 11 interações nos dados brutos
+(p = 0,19) e com o limite de poder da amostra.
+
+### 6.10 Por que os modelos se comportam de forma diferente
+
+**As baselines não degeneram com os defaults delas; o UDCF degenera com os dele.**
+
+Chi, ED e CTS produzem desvios entre 0,0023 e 0,0040 usando os hiperparâmetros
+configurados pelos próprios autores do LBCF — inclusive `min_samples_treatment=50`, que é
+o análogo conceitual do parâmetro que trava o UDCF na base RCT.
+
+A razão é estrutural: os critérios do CausalML (qui-quadrado, distância euclidiana, CTS)
+são **medidas de divergência entre distribuições**, sem limiar absoluto de ganho. O UDCF
+herda do GRF um limiar absoluto (`imbalance_penalty`) comparado contra uma quantidade que
+escala com a variância do desfecho — e com conversão de 0,9% essa quantidade fica quatro
+ordens de grandeza abaixo do limiar.
+
+Não é que o UDCF seja inferior: ele tem uma **dependência de escala** que os outros não
+têm.
+
+### 6.11 Ablação: o Intra split faz diferença?
+
+O parâmetro `stabilize_splits` de `udcf_trainer` seleciona a regra de divisão:
+
+```cpp
+udcf_trainer(K, 1, true)   // UDCFSplittingRule           — Inter + Intra
+udcf_trainer(K, 1, false)  // MultiRegressionSplittingRule — apenas Inter
+```
+
+Com `false`, o relabeling é o mesmo e o critério Inter é o mesmo; apenas o segundo estágio
+(Intra split, a contribuição do artigo) desaparece. É uma ablação exata, disponível no
+próprio código dos autores.
+
+| | UDCF (Inter+Intra) | Ablação (só Inter) |
+|---|---|---|
+| `ip = 0,01` | 0 splits · 300 tocos | **0 splits · 300 tocos** |
+| `ip = 0` | 11.407 splits | **28.375 splits** |
+
+Com os defaults, **os dois degeneram igualmente** — o Intra split não tem
+responsabilidade na degeneração. Com `ip = 0`, a ablação corta 2,5× mais, e a distribuição
+por variável é quase idêntica em proporção (`history` 30,0% vs 30,4%; `recency` 20,0% vs
+20,5%): o critério discriminativo **não redireciona a floresta para outras covariáveis**
+nesta base, apenas corta menos.
+
+Nas métricas (tabelas 6.9), nem UDCF nem ablação atingem significância. O UDCF aparenta
+ordenar melhor no braço feminino (BLP 0,401 vs −0,038), mas com p = 0,196 e p = 0,882 —
+**as duas são não-significativas, logo a diferença entre elas também não está
+estabelecida**.
+
+**Resposta à pergunta "o Intra split ajuda na Hillstrom?": não de forma detectável.**
+
 ---
 
 ## 7. Estado de verificação
