@@ -355,6 +355,27 @@ procedimento de build do UDCF) → `python data_merging.py`.
 **Saída:** um arquivo por braço (`MBCF_uplift_RCT1.csv` … `RCT7.csv`), unidos depois pelo
 `data_merging.py` em colunas `predict_1 … predict_K`.
 
+**Configuração usada pelos autores** (do `main.cpp` em `CF_DT_RCT.zip`):
+
+```cpp
+data.set_outcome_index(14);
+data.set_treatment_index(15);
+data.set_instrument_index(15);   // instrumento = tratamento
+double reduced_form_weight = 0.0;
+bool stabilize_splits = false;   // -> RegressionSplittingRuleFactory
+ForestTrainer trainer = instrumental_trainer(reduced_form_weight, stabilize_splits);
+ForestOptions options = ForestTestUtilities::default_options(true, 1);
+```
+
+Usar o tratamento como seu próprio instrumento é válido por se tratar de experimento
+aleatorizado, e é o que torna isso uma floresta causal binária padrão.
+
+**Observação relevante:** o código-fonte em `src/` do `CF_DT_RCT.zip` é **idêntico** ao do
+`LBCF_RCT.zip` (verificado com `diff -rq`). Os dois modelos compartilham a mesma base GRF;
+só mudam o `main.cpp` e o nome do alvo no CMake. Isso explica por que os zips do UDCF
+aparecem dentro da pasta `CF_DT` (seção 1) — e significa que uma única compilação serve
+aos dois modelos.
+
 **Esforço:** médio. É C++, mas o toolchain necessário é o mesmo já usado para o UDCF.
 
 ### 4.3 CT_ST (`Code/Model/CT_ST/`)
@@ -589,55 +610,112 @@ fora-da-amostra em todos os casos: `predict_oob` para os modelos em C++, valida�
 cruzada de 5 dobras estratificada para os do CausalML. As baselines usam os
 hiperparâmetros exatos que os autores do LBCF configuraram para elas.
 
+Protocolo: `predict_oob` para os modelos em C++ (UDCF, ablação, MBCF), validação cruzada
+de 5 dobras estratificada para os do CausalML. Cada braço é avaliado sobre as linhas de
+controle mais as daquele braço.
+
 **Mens E-Mail** (ATE ingênuo 0,006805; n = 42.613)
 
-| modelo | desvio | BLP | p | Q5−Q1 | p | placebo p |
-|---|---|---|---|---|---|---|
-| UDCF default | 0,000091 | −94,3 | 0,000 | −0,0243 | 0,000 | 0,000 |
-| UDCF `ip=0` | 0,002734 | 0,015 | 0,967 | 0,00263 | 0,382 | 0,973 |
-| Ablação `ip=0` | 0,003992 | 0,024 | 0,922 | 0,00081 | 0,798 | 0,910 |
-| Chi | 0,002800 | 0,446 | 0,200 | 0,00279 | 0,358 | 0,217 |
-| ED | 0,004007 | 0,314 | 0,234 | 0,00212 | 0,488 | 0,257 |
-| CTS | 0,002578 | 0,260 | 0,468 | 0,00394 | 0,200 | 0,423 |
+| modelo | splits | desvio | BLP | p | Q5−Q1 | p | placebo p |
+|---|---|---|---|---|---|---|---|
+| UDCF default | **0** | 0,000091 | −94,3 | 0,000 | −0,0243 | 0,000 | 0,000 |
+| UDCF `ip=0` | 11.407 | 0,002739 | 0,015 | 0,967 | 0,00263 | 0,382 | 0,973 |
+| Ablação `ip=0` | 28.375 | 0,003998 | 0,024 | 0,922 | 0,00081 | 0,798 | 0,910 |
+| Chi | — | 0,002801 | 0,446 | 0,200 | 0,00279 | 0,358 | 0,217 |
+| ED | — | 0,003998 | 0,314 | 0,234 | 0,00212 | 0,488 | 0,257 |
+| CTS | — | 0,002583 | 0,260 | 0,468 | 0,00394 | 0,200 | 0,423 |
+| MBCF default | 19.239 | 0,003084 | 0,068 | 0,830 | 0,00244 | 0,438 | 0,820 |
+| MBCF `ip=0` | 23.615 | 0,003531 | −0,046 | 0,866 | −0,00032 | 0,918 | 0,873 |
 
 **Womens E-Mail** (ATE ingênuo 0,003111; n = 42.693)
 
-| modelo | desvio | BLP | p | Q5−Q1 | p | placebo p |
-|---|---|---|---|---|---|---|
-| UDCF default | 0,000083 | −90,4 | 0,000 | −0,0219 | 0,000 | 0,000 |
-| UDCF `ip=0` | 0,002856 | 0,401 | 0,196 | 0,00406 | 0,118 | 0,213 |
-| Ablação `ip=0` | 0,003774 | −0,038 | 0,882 | 0,00107 | 0,702 | 0,850 |
-| **Chi** | 0,003393 | **0,523** | **0,047** | **0,00708** | **0,011** | 0,053 |
-| ED | 0,003728 | 0,213 | 0,424 | 0,00379 | 0,184 | 0,480 |
-| CTS | 0,002348 | −0,118 | 0,766 | −0,00007 | 0,980 | 0,737 |
+| modelo | splits | desvio | BLP | p | Q5−Q1 | p | placebo p |
+|---|---|---|---|---|---|---|---|
+| UDCF default | **0** | 0,000083 | −90,4 | 0,000 | −0,0219 | 0,000 | 0,000 |
+| UDCF `ip=0` | 11.407 | 0,002857 | 0,401 | 0,196 | 0,00406 | 0,118 | 0,213 |
+| Ablação `ip=0` | 28.375 | 0,003767 | −0,038 | 0,882 | 0,00107 | 0,702 | 0,850 |
+| **Chi** | — | 0,003392 | **0,523** | **0,047** | **0,00708** | **0,011** | 0,053 |
+| ED | — | 0,003718 | 0,213 | 0,424 | 0,00379 | 0,184 | 0,480 |
+| CTS | — | 0,002345 | −0,118 | 0,766 | −0,00007 | 0,980 | 0,737 |
+| MBCF default | 17.105 | 0,003039 | 0,305 | 0,319 | 0,00207 | 0,447 | 0,310 |
+| MBCF `ip=0` | 21.178 | 0,003507 | 0,038 | 0,888 | 0,00237 | 0,398 | 0,870 |
 
-**Interpretação, com a ressalva obrigatória.** O Chi no braço feminino é o único a atingir
-significância nominal. **Mas são 10 testes** (5 modelos × 2 braços), e um resultado a
-p = 0,047 em 10 testes é aproximadamente o que o acaso produz; sob Bonferroni o limiar
-seria 0,005. O placebo dá p = 0,053, na fronteira. Redação correta: *indício de
-heterogeneidade detectável no braço feminino, que não sobrevive à correção para múltiplas
-comparações*.
+**Dois fatos centrais.**
 
-**Conclusão: nenhum modelo demonstra heterogeneidade que sobreviva à correção por
-multiplicidade.** Coerente com o teste conjunto das 11 interações nos dados brutos
-(p = 0,19) e com o limite de poder da amostra.
+Primeiro: **o UDCF é o único modelo que degenera com os hiperparâmetros default dos
+autores.** MBCF, Chi, ED e CTS produzem heterogeneidade normalmente com as configurações
+que os próprios autores do LBCF definiram para eles.
 
-### 6.10 Por que os modelos se comportam de forma diferente
+Segundo: **nenhum modelo demonstra heterogeneidade estatisticamente detectável.** São 14
+testes legítimos (7 configurações não-degeneradas × 2 braços), e apenas um atinge
+p < 0,05 — o Chi no braço feminino, que é aproximadamente o que o acaso entrega em 14
+testes e não sobrevive a Bonferroni (limiar 0,0036). Seu placebo dá p = 0,053, na
+fronteira. Redação correta: *indício de heterogeneidade no braço feminino, que não
+sobrevive à correção para múltiplas comparações*.
 
-**As baselines não degeneram com os defaults delas; o UDCF degenera com os dele.**
+Coerente com o teste conjunto das 11 interações nos dados brutos (p = 0,19) e com o limite
+de poder da amostra.
 
-Chi, ED e CTS produzem desvios entre 0,0023 e 0,0040 usando os hiperparâmetros
-configurados pelos próprios autores do LBCF — inclusive `min_samples_treatment=50`, que é
-o análogo conceitual do parâmetro que trava o UDCF na base RCT.
+**Padrão não estabelecido, registrado por transparência:** em 3 das 4 comparações pareadas
+em que uma versão corta mais que a outra, a que corta **menos** apresenta BLP maior
+(UDCF 11.407 → 0,401 vs ablação 28.375 → −0,038; MBCF 19.239 → 0,305 vs MBCF 23.615 →
+0,038). O braço masculino contradiz num dos pares, e todas as diferenças são
+não-significativas. Fraco demais para afirmar; anotado apenas para não omitir.
 
-A razão é estrutural: os critérios do CausalML (qui-quadrado, distância euclidiana, CTS)
-são **medidas de divergência entre distribuições**, sem limiar absoluto de ganho. O UDCF
-herda do GRF um limiar absoluto (`imbalance_penalty`) comparado contra uma quantidade que
-escala com a variância do desfecho — e com conversão de 0,9% essa quantidade fica quatro
-ordens de grandeza abaixo do limiar.
+### 6.10 Por que o UDCF degenera e os outros não
 
-Não é que o UDCF seja inferior: ele tem uma **dependência de escala** que os outros não
-têm.
+A explicação tem **dois ingredientes**, e apenas o segundo é específico do UDCF.
+
+**Ingrediente 1 — o limiar é absoluto.** Vem do GRF e vale para toda a família: o
+candidato só é aceito se `decrease > 0`, e `decrease` subtrai
+`imbalance_penalty × (1/n_esq + 1/n_dir)`. Presente no `UDCFSplittingRule`, no
+`MultiRegressionSplittingRule` e no `RegressionSplittingRule` igualmente.
+
+**Ingrediente 2 — a normalização do relabeling.** Aqui os dois divergem:
+
+```cpp
+// UDCFRelabelingStrategy.cpp:70     rho_weight = W_centrado * A^-1,  A = W'W ~ O(n)
+responses_by_sample(sample, j) = rho_weight(i, treatment) * residual(i, outcome);
+
+// InstrumentalRelabelingStrategy.cpp:94     sem normalizacao alguma
+responses_by_sample(sample, 0) = (instrumento - media) * residual;
+```
+
+O relabeling multi-braço **divide por `(W'W)⁻¹`, que escala como 1/n**. O instrumental
+não divide por nada.
+
+Verificação numérica na Hillstrom, calculando os dois relabelings sobre nós do mesmo
+tamanho:
+
+| n do nó | UDCF \|ρ\| médio | Instrumental \|ρ\| médio | razão |
+|---|---|---|---|
+| 40.000 | 8,14 × 10⁻⁷ | 9,00 × 10⁻³ | 11.059× |
+| 16.000 | 1,98 × 10⁻⁶ | 9,20 × 10⁻³ | 4.654× |
+| 4.000 | 6,69 × 10⁻⁶ | 9,39 × 10⁻³ | 1.405× |
+| 1.000 | 6,20 × 10⁻⁵ | 9,94 × 10⁻³ | 160× |
+
+O instrumental fica **constante em ~0,009 independente de n**; o do UDCF **encolhe**
+conforme o nó cresce. E a consequência, num nó de 16.000 amostras:
+
+```
+UDCF         max‖s_esq‖² = 4,83 × 10⁻⁶   →  reprovado no limiar de 0,01
+Instrumental max‖s_esq‖² = 3,80 × 10¹    →  aprovado com folga de 3.800×
+```
+
+**Conclusão.** Não é que o UDCF seja inferior, nem que os defaults do GRF sejam ruins em
+geral. É que o critério multi-braço tem uma **dependência do tamanho do nó** que o critério
+binário não tem, e essa dependência interage mal com um limiar absoluto herdado. Em
+amostra pequena com desfecho de escala grande — os 2.000 registros e desfecho na casa dos
+milhares dos autores — o fator 1/n não morde. Em amostra grande com desfecho binário raro,
+morde duas vezes.
+
+Isso também explica a propriedade contraintuitiva registrada em 6.4: **mais dados tornam o
+split mais difícil**. O 1/n vem daqui.
+
+**Registro de correção.** Uma versão anterior destas notas atribuía a diferença ao fato de
+os critérios do CausalML serem medidas de divergência sem limiar absoluto. Essa explicação
+estava incompleta: não dava conta do MBCF, que **tem** o limiar absoluto e ainda assim
+produz 19.239 divisões. A explicação acima, verificada numericamente, substitui aquela.
 
 ### 6.11 Ablação: o Intra split faz diferença?
 
