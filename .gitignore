@@ -21,3 +21,12 @@ __pycache__/
 
 # Word
 ~$*.docx
+
+# Resultados regeneraveis (predicoes dos modelos)
+resultados/*.csv
+resultados/hillstrom_input*.txt
+resultados/abl_*
+resultados/mbcf_*
+resultados/pred_*
+resultados/visit_udcf_*
+resultados/visit_abla_*

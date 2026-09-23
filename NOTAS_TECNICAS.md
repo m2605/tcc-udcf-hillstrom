@@ -770,6 +770,168 @@ liberdade. Uma explicação plausível para o Intra split não fazer diferença 
 que, com dois braços, ele tem pouco o que discriminar. A contribuição do artigo foi
 projetada para o cenário de muitos tratamentos, que não é o da Hillstrom.
 
+### 6.13 Segundo desfecho: `visit`
+
+A base Hillstrom traz três desfechos pós-tratamento: `visit`, `conversion` e `spend`. O
+trabalho usa `conversion`. Rodou-se **todo o pipeline também com `visit`**, não para trocar
+o desfecho, mas para obter um contraste de poder estatístico dentro da mesma base, com as
+mesmas covariáveis e o mesmo experimento.
+
+| | `conversion` | `visit` |
+|---|---|---|
+| taxa geral | 0,903% | **14,678%** |
+| controle | 0,573% | 10,617% |
+| Mens E-Mail | 1,253% | 18,276% |
+| Womens E-Mail | 0,884% | 15,140% |
+| ATE mens | +0,681 pp | **+7,659 pp** |
+| ATE womens | +0,311 pp | **+4,523 pp** |
+
+Dezesseis vezes mais eventos, efeito cerca de onze vezes maior.
+
+### 6.14 O UDCF degenera com `visit` também — e isso isola a causa
+
+| desfecho | `imbalance_penalty` | splits | tocos |
+|---|---|---|---|
+| `conversion` | 0,01 | **0** | 300/300 |
+| **`visit`** | 0,01 | **0** | **300/300** |
+| `conversion` | 0 | 11.407 | 0 |
+| `visit` | 0 | 11.681 | 0 |
+
+A ablação (sem Intra split) degenera igualmente com `ip = 0,01` nos dois desfechos, e faz
+38.618 divisões com `ip = 0` em `visit`.
+
+**Consequência.** Uma hipótese anterior — de que a raridade do evento contribuía para a
+degeneração — **fica descartada**. Trocar o desfecho multiplicou a escala do resíduo por
+cerca de 4 e o ganho por cerca de 14, mas a distância até o limiar era de **quatro ordens
+de grandeza**. Não chega perto.
+
+Sobra o mecanismo estrutural puro descrito em 6.10: normalização por `(W'W)⁻¹ ~ 1/n`
+contra um limiar absoluto. **A degeneração não depende das particularidades da Hillstrom** —
+ocorrerá em qualquer base cujo `n` seja grande o bastante. A base dos autores escapa por
+ter apenas 2.000 linhas e desfecho na casa dos milhares.
+
+### 6.15 Avaliação orientada à decisão: valor da política
+
+As métricas de ordenação (BLP, GATES, Qini, RATE) avaliam **um braço de cada vez**: *este
+modelo ordena bem as pessoas para o e-mail masculino contra não enviar nada?* Nenhuma
+delas toca a segunda camada da decisão — *qual* e-mail —, que é exatamente o que o Intra
+split do UDCF otimiza.
+
+Adotou-se, portanto, uma avaliação de **valor de política**. A política de um modelo
+atribui a cada pessoa uma ação em {nada, mens, womens} pelo maior CATE estimado. O valor é
+estimado nas pessoas cujo braço **sorteado** coincidiu com o recomendado — estimador de
+Hájek, válido porque a atribuição é aleatorizada e independente das covariáveis. É a mesma
+lógica do PMG dos autores, sem exigir custo nem orçamento (a Hillstrom não traz custo por
+tratamento, o que torna o DGB inaplicável por falta de dado, não apenas por escopo).
+
+Implementação: `causalml.optimize` (`get_uplift_best`, `get_actual_value`), nativa para
+múltiplos tratamentos.
+
+**Políticas de referência:**
+
+| referência | o que estabelece |
+|---|---|
+| não abordar ninguém | o piso |
+| **`mens` para todos** | **a barra honesta** — o melhor sem personalização |
+| `womens` para todos | o outro braço fixo |
+| braço sorteado para todos | personalizar sem informação |
+| mesmas pessoas, braço sorteado | *(descartada — ver abaixo)* |
+
+**Ressalva registrada.** A quinta referência, inicialmente proposta para isolar a camada 2,
+mostrou-se **contaminada**: o UDCF degenerado a superava em +0,184 pp, apesar de recomendar
+`mens` para 100% das pessoas. O ganho era apenas o efeito marginal de `mens` > `womens`,
+não personalização. A referência honesta para a camada 2 é **`mens` para todos**.
+
+**Resultados (desfecho `visit`; barra = 18,276%; erro-padrão 0,263 pp):**
+
+| modelo | % que manda `mens` | valor | vs. barra |
+|---|---|---|---|
+| CTS | 82,4% | 18,381% | +0,105 |
+| UDCF `ip=0` | 82,9% | 18,334% | +0,058 |
+| UDCF default | **100,0%** | 18,276% | +0,000 |
+| MBCF | 79,8% | 18,234% | −0,042 |
+| Ablação `ip=0` | 78,1% | 18,210% | −0,065 |
+| ED | 72,4% | 18,210% | −0,065 |
+| Chi | 79,0% | 18,201% | −0,075 |
+| S-learner | 81,5% | 18,159% | −0,117 |
+| T-learner | 77,2% | 18,022% | −0,254 |
+
+A maior vantagem é de **0,40 erro-padrão**. Nenhum modelo supera mandar `mens` para todos.
+Com `conversion` o quadro é o mesmo (melhor: UDCF `ip=0`, +0,029 pp contra 0,073 pp de
+erro-padrão).
+
+**Curva de cobertura** (tratar os top q% pelo maior CATE): sobe monotonicamente em todos os
+modelos e nos dois desfechos. Não existe fração de cobertura que supere tratar toda a base.
+
+**O UDCF degenerado recomenda `mens` para 100% das pessoas** — com CATE constante o argmax
+é sempre o mesmo braço. Sua "política personalizada" é literalmente a política cega, e
+pontua exatamente a barra. Ilustração de que política sem heterogeneidade colapsa para a
+ação marginal.
+
+### 6.16 Com `visit`, a heterogeneidade existe e todos os modelos a encontram
+
+Qini com nulo por permutação (`normalize=False`, 400 permutações) e GATES por quintil:
+
+**Braço `womens`** (ATE ingênuo +4,523 pp):
+
+| modelo | Qini | p | GATES Q1→Q5 (pp) | Q5−Q1 | p |
+|---|---|---|---|---|---|
+| Chi | 147,8 | 0,000 | 2,1 · 0,7 · 5,3 · 8,0 · 6,6 | +4,54 | 0,000 |
+| S-learner | 145,0 | 0,000 | 2,2 · 0,5 · 4,8 · 8,1 · 7,0 | +4,80 | 0,000 |
+| Ablação `ip=0` | 144,0 | 0,000 | 2,3 · 1,6 · 3,6 · 8,7 · 6,5 | +4,20 | 0,000 |
+| ED | 143,9 | 0,000 | 2,1 · 0,2 · 5,4 · 8,7 · 6,2 | +4,05 | 0,000 |
+| MBCF | 142,5 | 0,000 | 2,2 · 1,2 · 4,4 · 8,0 · 6,7 | +4,49 | 0,000 |
+| T-learner | 141,4 | 0,000 | 2,4 · 0,6 · 4,8 · 7,5 · 7,3 | +4,86 | 0,000 |
+| UDCF `ip=0` | 135,4 | 0,000 | 2,3 · 0,7 · 4,9 · 8,2 · 6,6 | +4,30 | 0,000 |
+| CTS | 125,6 | 0,000 | 2,5 · 2,0 · 3,1 · 8,8 · 6,1 | +3,64 | 0,000 |
+| **UDCF default** | **−160,8** | 1,000 | 8,2 · 6,1 · 4,5 · 4,0 · −0,1 | **−8,29** | **0,000** |
+
+**Braço `mens`** (ATE ingênuo +7,659 pp): nenhum modelo atinge significância (o melhor é
+CTS, p = 0,055 no Qini e 0,063 no GATES); os perfis de GATES são praticamente planos.
+
+Ou seja: **a heterogeneidade da Hillstrom está no braço feminino**, e todos os oito modelos
+funcionais a encontram, com desempenho muito próximo (Qini de 125,6 a 147,8). Isso é
+coerente com o teste direto nos dados brutos (seção 6.8): o e-mail feminino tem efeito de
+7,31% em quem tem histórico feminino contra 1,11% em quem não tem, com z = 9,7 no `visit`.
+
+### 6.17 Detectar heterogeneidade não é o mesmo que poder explorá-la
+
+Os dois resultados acima parecem contraditórios — heterogeneidade altamente significativa,
+mas nenhum ganho de política. A aritmética resolve:
+
+- o melhor quintil respondedor ao e-mail **feminino** recebe **~8,2 pp**;
+- mandar o e-mail **masculino** para qualquer pessoa já entrega **+7,659 pp** em média.
+
+O ganho de identificar corretamente quem responde ao feminino é de **~0,5 pp, e apenas
+naquele quintil**. Diluído na base, aproximadamente **0,1 pp** — exatamente a ordem de
+grandeza das diferenças observadas na tabela de política.
+
+**A heterogeneidade é real, é detectável, e é inexplorável** — porque o braço onde ela
+existe é dominado em média pelo outro braço. É um achado aplicado que merece destaque: em
+um cenário multi-tratamento, a utilidade da personalização depende não só de existir
+heterogeneidade, mas de ela ser grande o bastante para reverter a ordem marginal dos
+tratamentos.
+
+**Correção registrada.** A expectativa declarada antes de rodar era de que o desfecho
+`visit` destravaria a camada 2 e permitiria distinguir os modelos por valor de política.
+**Não destravou** — a resposta de aplicação é idêntica à de `conversion`. O que a troca
+entregou foi outra coisa, e mais valiosa: (i) descartou a raridade do evento como causa da
+degeneração do UDCF, e (ii) elevou o poder estatístico a ponto de "não há ganho em
+personalizar" deixar de ser inconclusivo e passar a ser um resultado sustentado.
+
+### 6.18 Figura
+
+`curvas_qini.png` (raiz do repositório): curvas Qini em múltiplos pequenos, um painel por
+modelo, para os dois braços, desfecho `conversion`. A linha tracejada é o ranking
+aleatório; acima dela o modelo prioriza melhor que o acaso. O painel do UDCF default
+mergulha abaixo da diagonal — até −42 respondentes incrementais no braço feminino —,
+tornando visível o artefato descrito em 6.7.
+
+*Nota de execução: o validador de paleta do procedimento de visualização não pôde ser
+executado (Node.js ausente no ambiente). Usaram-se os valores documentados da paleta de
+referência sem alteração, e o desenho em múltiplos pequenos dispensa codificação
+categórica de cor.*
+
 ---
 
 ## 7. Estado de verificação
